@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 
 	"../pkg/commercetools"
 	"../pkg/structs"
@@ -26,6 +28,7 @@ func main() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/getProducts", getProducts).Methods("GET")
+	router.HandleFunc("/product", getProduct).Methods("GET")
 
 	headersOk := handlers.AllowedHeaders([]string{"Content-Type"})
 	originsOk := handlers.AllowedOrigins([]string{"*"}) //TODO change with the "production" host
@@ -60,4 +63,24 @@ func getProducts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(products)
+}
+
+func getProduct(w http.ResponseWriter, r *http.Request) {
+	productID := r.URL.Query().Get("productId")
+
+	w.Header().Set("Content-Type", "application/json")
+
+	commerceProduct := commercetools.GetProduct(productID, []string{"size", "season"}, []string{"gender", "madeInItaly"})
+
+	fmt.Println(reflect.TypeOf(commerceProduct.Product.MasterData.Current.MasterVariant.AttributesText[0].Value))
+
+	var product = structs.ProductFull{
+		Id:    commerceProduct.Product.Id,
+		Name:  commerceProduct.Product.MasterData.Current.Name,
+		Image: commerceProduct.Product.MasterData.Current.MasterVariant.Images[0].Url,
+		Price: commerceProduct.Product.MasterData.Current.MasterVariant.Price.Value.CentAmount,
+		Size:  commerceProduct.Product.MasterData.Current.MasterVariant.AttributesText[0].Value.(string),
+	}
+
+	json.NewEncoder(w).Encode(product)
 }

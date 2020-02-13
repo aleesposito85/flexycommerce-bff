@@ -7,6 +7,14 @@ type Product struct {
 	Price int64  `json:"price, omitempty"`
 }
 
+type ProductFull struct {
+	Id    string `json:"id"`
+	Name  string `json:"name,omitempty"`
+	Image string `json:"image, omitempty"`
+	Price int64  `json:"price, omitempty"`
+	Size  string `json:"size"`
+}
+
 type Products struct {
 	Products []Product `json:"products"`
 }
