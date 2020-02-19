@@ -81,7 +81,7 @@ func GetCart(w http.ResponseWriter, r *http.Request) CartResponse {
 	if err != nil {
 		fmt.Printf("The HTTP request failed with error %s\n", err)
 	}
-
+	fmt.Println("Get cart response status: " + response.Status)
 	json.NewDecoder(response.Body).Decode(&carts)
 
 	if len(carts.Results) > 0 {
@@ -108,6 +108,8 @@ func AddToCart(w http.ResponseWriter, r *http.Request, request structs.AddToCart
 	//httpClient := getHttpClient()
 	url := "https://api.sphere.io/flexy-commerce/me/carts/" + cartID
 
+	fmt.Println("Calling url: " + url)
+
 	action := CartUpdateAction{
 		Action:    "addLineItem",
 		ProductId: request.ProductId,
@@ -132,7 +134,7 @@ func AddToCart(w http.ResponseWriter, r *http.Request, request structs.AddToCart
 		log.Fatal("Error reading response. ", err)
 	}
 	defer resp.Body.Close()
-
+	fmt.Println("Add to cart response status: " + resp.Status)
 	json.NewDecoder(resp.Body).Decode(&cart)
 
 	return cart
@@ -160,7 +162,7 @@ func CreateCart(w http.ResponseWriter, r *http.Request) string {
 		log.Fatal("Error reading response. ", err)
 	}
 	defer resp.Body.Close()
-
+	fmt.Println("Create cart response status: " + resp.Status)
 	var cart CartResponse
 	json.NewDecoder(resp.Body).Decode(&cart)
 	return cart.Id
@@ -173,6 +175,9 @@ func getHttpClient() *http.Client {
 func setAuthToken(w http.ResponseWriter, r *http.Request, req *http.Request) {
 	var token string
 	token = services.GetCookieToken(r)
+
+	fmt.Println("Token from cookie: " + token)
+
 	if token == "" {
 		ctx := context.Background()
 		conf := &clientcredentials.Config{
@@ -185,6 +190,8 @@ func setAuthToken(w http.ResponseWriter, r *http.Request, req *http.Request) {
 		authToken, _ := conf.Token(ctx)
 		token = authToken.AccessToken
 		services.SetCookieToken(w, r, token)
+
+		fmt.Println("Token from new: " + token)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)

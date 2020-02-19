@@ -100,6 +100,7 @@ func getCart(w http.ResponseWriter, r *http.Request) {
 }
 
 func addToCart(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Calling add to cart")
 	w.Header().Set("Content-Type", "application/json")
 	/*
 		body, err := ioutil.ReadAll(r.Body)
