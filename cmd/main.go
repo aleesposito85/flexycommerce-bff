@@ -34,7 +34,7 @@ func main() {
 
 	headersOk := handlers.AllowedHeaders([]string{"Content-Type"})
 	originsOk := handlers.AllowedOrigins([]string{"*"}) //TODO change with the "production" host
-	methodsOk := handlers.AllowedMethods([]string{"GET", "OPTIONS"})
+	methodsOk := handlers.AllowedMethods([]string{"GET", "OPTIONS", "POST"})
 
 	h1 := handlers.CombinedLoggingHandler(os.Stdout, router)
 	h2 := handlers.CompressHandler(h1)
