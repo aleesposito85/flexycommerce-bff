@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 
@@ -135,6 +136,12 @@ func AddToCart(w http.ResponseWriter, r *http.Request, request structs.AddToCart
 	}
 	defer resp.Body.Close()
 	fmt.Println("Add to cart response status: " + resp.Status)
+
+	if resp.StatusCode > 299 {
+		b, _ := ioutil.ReadAll(resp.Body)
+		fmt.Println(string(b))
+	}
+
 	json.NewDecoder(resp.Body).Decode(&cart)
 
 	return cart
