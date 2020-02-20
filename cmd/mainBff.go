@@ -2,11 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"reflect"
 
 	"../pkg/commercetools"
 	"../pkg/structs"
@@ -31,6 +29,7 @@ func main() {
 	router.HandleFunc("/product", getProduct).Methods("GET")
 	router.HandleFunc("/cart", getCart).Methods("GET")
 	router.HandleFunc("/addToCart", addToCart).Methods("POST")
+	router.HandleFunc("/updateCartItem", updateCartItem).Methods("POST")
 
 	headersOk := handlers.AllowedHeaders([]string{"Content-Type"})
 	originsOk := handlers.AllowedOrigins([]string{"*"}) //TODO change with the "production" host
@@ -74,7 +73,7 @@ func getProduct(w http.ResponseWriter, r *http.Request) {
 
 	commerceProduct := commercetools.GetProduct(productID, []string{"size", "season"}, []string{"gender", "madeInItaly"})
 
-	fmt.Println(reflect.TypeOf(commerceProduct.Product.MasterData.Current.MasterVariant.AttributesText[0].Value))
+	//fmt.Println(reflect.TypeOf(commerceProduct.Product.MasterData.Current.MasterVariant.AttributesText[0].Value))
 
 	var product = structs.ProductFull{
 		Id:    commerceProduct.Product.Id,
@@ -92,7 +91,7 @@ func getCart(w http.ResponseWriter, r *http.Request) {
 
 	commerceCart := commercetools.GetCart(w, r)
 
-	if len(commerceCart.Id) > 0 {
+	if len(commerceCart.ID) > 0 {
 		json.NewEncoder(w).Encode(commerceCart)
 	} else {
 		json.NewEncoder(w).Encode(nil)
@@ -100,17 +99,8 @@ func getCart(w http.ResponseWriter, r *http.Request) {
 }
 
 func addToCart(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Calling add to cart")
 	w.Header().Set("Content-Type", "application/json")
-	/*
-		body, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			log.Printf("Error reading body: %v", err)
-			http.Error(w, "can't read body", http.StatusBadRequest)
-			return
-		}
-		fmt.Println(body)
-	*/
+
 	var cartRequest structs.AddToCartRequest
 
 	// Try to decode the request body into the struct. If there is an error,
@@ -122,6 +112,24 @@ func addToCart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newCart := commercetools.AddToCart(w, r, cartRequest)
+
+	json.NewEncoder(w).Encode(newCart)
+}
+
+func updateCartItem(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var cartItemRequest structs.UpdateCartItemRequest
+
+	// Try to decode the request body into the struct. If there is an error,
+	// respond to the client with the error message and a 400 status code.
+	err := json.NewDecoder(r.Body).Decode(&cartItemRequest)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	newCart := commercetools.UpdateItemToCart(w, r, cartItemRequest)
 
 	json.NewEncoder(w).Encode(newCart)
 }

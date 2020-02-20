@@ -22,9 +22,10 @@ type AddToCartRequest struct {
 }
 
 type CartUpdateAction struct {
-	Action    string `json:"action"`
-	ProductId string `json:"productId"`
-	Quantity  int64  `json:"quantity"`
+	Action     string `json:"action,omitempty"`
+	ProductId  string `json:"productId,omitempty"`
+	LineItemId string `json:"lineItemId,omitempty"`
+	Quantity   int64  `json:"quantity"`
 }
 
 type CartsResponse struct {
@@ -36,14 +37,15 @@ type CartsResponse struct {
 }
 
 type CartResponse struct {
-	Id          string        `json:"id, omitempty"`
-	Version     int64         `json:"version, omitempty"`
-	AnonymousId string        `json:"anonymousId, omitempty"`
-	TotalPrice  structs.Price `json:"totalPrice, omitempty"`
-	LineItems   []LineItem    `json:"lineItems, omitempty"`
+	ID          string        `json:"id,omitempty"`
+	Version     int64         `json:"version,omitempty"`
+	AnonymousId string        `json:"anonymousId,omitempty"`
+	TotalPrice  structs.Price `json:"totalPrice,omitempty"`
+	LineItems   []LineItem    `json:"lineItems,omitempty"`
 }
 
 type LineItem struct {
+	Id         string             `json:"id"`
 	ProductId  string             `json:"productId"`
 	Price      structs.PriceValue `json:"price"`
 	Quantity   int64              `json:"quantity"`
@@ -63,8 +65,9 @@ type CreateCartRequest struct {
 	Currency string `json:"currency"`
 }
 
-var httpClient = getHttpClient()
+var httpClient = getHTTPClient()
 
+//GetCart returns the active cart of the user based on access token
 func GetCart(w http.ResponseWriter, r *http.Request) CartResponse {
 
 	var carts CartsResponse
@@ -92,21 +95,17 @@ func GetCart(w http.ResponseWriter, r *http.Request) CartResponse {
 	return CartResponse{}
 }
 
+//AddToCart adds a product with the specified quantity to the user cart (new or existing)
 func AddToCart(w http.ResponseWriter, r *http.Request, request structs.AddToCartRequest) CartResponse {
 
-	cart := GetCart(w, r)
+	cartID, cartVersion := services.GetCartIDAndVersion(r)
 
-	var cartID string
-	var version int64
-	if len(cart.LineItems) > 0 {
-		cartID = cart.Id
-		version = cart.Version
-	} else {
-		cartID = CreateCart(w, r)
-		version = 1
+	if cartID == "" {
+		cart := GetOrCreateCart(w, r)
+		cartID = cart.ID
+		cartVersion = cart.Version
 	}
 
-	//httpClient := getHttpClient()
 	url := "https://api.sphere.io/flexy-commerce/me/carts/" + cartID
 
 	fmt.Println("Calling url: " + url)
@@ -118,7 +117,7 @@ func AddToCart(w http.ResponseWriter, r *http.Request, request structs.AddToCart
 	}
 
 	commerceToolsRequest := AddToCartRequest{
-		Version: version,
+		Version: cartVersion,
 		Actions: []CartUpdateAction{action},
 	}
 	data, _ := json.Marshal(commerceToolsRequest)
@@ -142,12 +141,80 @@ func AddToCart(w http.ResponseWriter, r *http.Request, request structs.AddToCart
 		fmt.Println(string(b))
 	}
 
+	var cart CartResponse
 	json.NewDecoder(resp.Body).Decode(&cart)
+
+	services.StoreCartIDAndVersion(w, r, cart.ID, cart.Version)
+	return cart
+}
+
+//UpdateItemToCart updates the quantity of an item in the cart
+func UpdateItemToCart(w http.ResponseWriter, r *http.Request, request structs.UpdateCartItemRequest) CartResponse {
+	cartID, cartVersion := services.GetCartIDAndVersion(r)
+
+	if cartID == "" {
+		cart := GetOrCreateCart(w, r)
+		cartID = cart.ID
+		cartVersion = cart.Version
+	}
+
+	url := "https://api.sphere.io/flexy-commerce/me/carts/" + cartID
+
+	fmt.Println("Calling url: " + url)
+
+	action := CartUpdateAction{
+		Action:     "changeLineItemQuantity",
+		LineItemId: request.ItemId,
+		Quantity:   request.Quantity,
+	}
+
+	commerceToolsRequest := AddToCartRequest{
+		Version: cartVersion,
+		Actions: []CartUpdateAction{action},
+	}
+	data, _ := json.Marshal(commerceToolsRequest)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	if err != nil {
+		log.Fatal("Error reading request. ", err)
+	}
+	setAuthToken(w, r, req)
+
+	// Send request
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Fatal("Error reading response. ", err)
+	}
+	defer resp.Body.Close()
+	fmt.Println("Add to cart response status: " + resp.Status)
+
+	if resp.StatusCode > 299 {
+		b, _ := ioutil.ReadAll(resp.Body)
+		fmt.Println(string(b))
+	}
+	var updatedCart CartResponse
+	json.NewDecoder(resp.Body).Decode(&updatedCart)
+
+	services.StoreCartIDAndVersion(w, r, updatedCart.ID, updatedCart.Version)
+
+	return updatedCart
+}
+
+//GetOrCreateCart used to fetch an active cart based on user access token or create a new one if none is available
+func GetOrCreateCart(w http.ResponseWriter, r *http.Request) CartResponse {
+	cart := GetCart(w, r)
+
+	if cart.Version == 0 {
+		cart = CreateCart(w, r)
+	}
+
+	services.StoreCartIDAndVersion(w, r, cart.ID, cart.Version)
 
 	return cart
 }
 
-func CreateCart(w http.ResponseWriter, r *http.Request) string {
+//CreateCart creates a new cart regardless of the already existing ones
+func CreateCart(w http.ResponseWriter, r *http.Request) CartResponse {
 	//httpClient := getHttpClient()
 	url := "https://api.sphere.io/flexy-commerce/me/carts"
 
@@ -172,10 +239,10 @@ func CreateCart(w http.ResponseWriter, r *http.Request) string {
 	fmt.Println("Create cart response status: " + resp.Status)
 	var cart CartResponse
 	json.NewDecoder(resp.Body).Decode(&cart)
-	return cart.Id
+	return cart
 }
 
-func getHttpClient() *http.Client {
+func getHTTPClient() *http.Client {
 	return &http.Client{}
 }
 

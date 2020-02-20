@@ -39,3 +39,8 @@ type AddToCartRequest struct {
 	ProductId string `json:"productId"`
 	Quantity  int64  `json:"quantity"`
 }
+
+type UpdateCartItemRequest struct {
+	ItemId   string `json:"itemId"`
+	Quantity int64  `json:"quantity"`
+}
