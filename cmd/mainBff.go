@@ -34,11 +34,12 @@ func main() {
 	headersOk := handlers.AllowedHeaders([]string{"Content-Type"})
 	originsOk := handlers.AllowedOrigins([]string{"*"}) //TODO change with the "production" host
 	methodsOk := handlers.AllowedMethods([]string{"GET", "OPTIONS", "POST"})
+	allowCredentials := handlers.AllowCredentials()
 
 	h1 := handlers.CombinedLoggingHandler(os.Stdout, router)
 	h2 := handlers.CompressHandler(h1)
 
-	log.Fatal(http.ListenAndServe(":8180", handlers.CORS(originsOk, headersOk, methodsOk)(h2)))
+	log.Fatal(http.ListenAndServe(":8180", handlers.CORS(originsOk, headersOk, methodsOk, allowCredentials)(h2)))
 }
 
 func getProducts(w http.ResponseWriter, r *http.Request) {

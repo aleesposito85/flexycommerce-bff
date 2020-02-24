@@ -1,11 +1,14 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 func GetCookieToken(r *http.Request) string {
@@ -65,4 +68,29 @@ func StoreCartIDAndVersion(w http.ResponseWriter, r *http.Request, cartID string
 		Value:   value,
 		Expires: time.Now().Add(3600 * time.Second),
 	})
+}
+
+func SetAuthToken(w http.ResponseWriter, r *http.Request, req *http.Request) {
+	var token string
+	token = GetCookieToken(r)
+
+	fmt.Println("Token from cookie: " + token)
+
+	if token == "" {
+		ctx := context.Background()
+		conf := &clientcredentials.Config{
+			ClientID:     "EN4wn2L0gEUyEhim76SHs4N0",
+			ClientSecret: "nCepZvUBjqL0Cw36U1t6QeWZmyzzzaLr",
+			Scopes:       []string{"manage_my_profile:flexy-commerce", "manage_my_shopping_lists:flexy-commerce", "manage_my_orders:flexy-commerce", "create_anonymous_token:flexy-commerce", "manage_my_payments:flexy-commerce", "view_published_products:flexy-commerce"},
+			TokenURL:     "https://auth.sphere.io/oauth/flexy-commerce/anonymous/token/",
+		}
+
+		authToken, _ := conf.Token(ctx)
+		token = authToken.AccessToken
+		SetCookieToken(w, r, token)
+
+		fmt.Println("Token from new: " + token)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
 }

@@ -44,3 +44,21 @@ type UpdateCartItemRequest struct {
 	ItemId   string `json:"itemId"`
 	Quantity int64  `json:"quantity"`
 }
+
+type CommerceResultsResponse struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+	Count  int64 `json:"count"`
+	Total  int64 `json:"total"`
+}
+
+type ShippingMethod struct {
+	ID          string     `json:"id,omitempty"`
+	Name        string     `json:"name,omitempty"`
+	Description string     `json:"description,omitempty"`
+	Price       PriceValue `json:"price"`
+}
+
+type ShippingsResponse struct {
+	Shippings []ShippingMethod `json:"shippings"`
+}
