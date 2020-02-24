@@ -32,7 +32,7 @@ func main() {
 	router.HandleFunc("/updateCartItem", updateCartItem).Methods("POST")
 
 	headersOk := handlers.AllowedHeaders([]string{"Content-Type"})
-	originsOk := handlers.AllowedOrigins([]string{"*"}) //TODO change with the "production" host
+	originsOk := handlers.AllowedOrigins([]string{"http://localhost:3000"}) //TODO change with the "production" host
 	methodsOk := handlers.AllowedMethods([]string{"GET", "OPTIONS", "POST"})
 	allowCredentials := handlers.AllowCredentials()
 
