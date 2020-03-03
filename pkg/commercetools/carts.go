@@ -46,6 +46,7 @@ type CartResponse struct {
 
 type LineItem struct {
 	Id         string             `json:"id"`
+	Name       interface{}        `json:"name"`
 	ProductId  string             `json:"productId"`
 	Price      structs.PriceValue `json:"price"`
 	Quantity   int64              `json:"quantity"`
@@ -86,6 +87,12 @@ func GetCart(w http.ResponseWriter, r *http.Request) CartResponse {
 		fmt.Printf("The HTTP request failed with error %s\n", err)
 	}
 	fmt.Println("Get cart response status: " + response.Status)
+
+	if response.StatusCode > 299 {
+		b, _ := ioutil.ReadAll(response.Body)
+		fmt.Println(string(b))
+	}
+
 	json.NewDecoder(response.Body).Decode(&carts)
 
 	if len(carts.Results) > 0 {
