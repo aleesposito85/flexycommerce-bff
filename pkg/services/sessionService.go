@@ -8,11 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
 
-func GetCookieToken(r *http.Request) string {
-	c, err := r.Cookie("session_token")
+const Session_Token = "session_token"
+const Customer_Token = "customer_token"
+
+func GetCookieValue(r *http.Request, cookie string) string {
+	c, err := r.Cookie(cookie)
 	if err != nil {
 		if err == http.ErrNoCookie {
 			return ""
@@ -21,16 +25,16 @@ func GetCookieToken(r *http.Request) string {
 	return c.Value
 }
 
-func SetCookieToken(w http.ResponseWriter, r *http.Request, token string) {
+func SetCookieValue(w http.ResponseWriter, r *http.Request, cookie string, value string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:    "session_token",
-		Value:   token,
+		Name:    cookie,
+		Value:   value,
 		Expires: time.Now().Add(3600 * time.Second),
 	})
 
 	r.AddCookie(&http.Cookie{
-		Name:    "session_token",
-		Value:   token,
+		Name:    cookie,
+		Value:   value,
 		Expires: time.Now().Add(3600 * time.Second),
 	})
 }
@@ -72,24 +76,51 @@ func StoreCartIDAndVersion(w http.ResponseWriter, r *http.Request, cartID string
 
 func SetAuthToken(w http.ResponseWriter, r *http.Request, req *http.Request) {
 	var token string
-	token = GetCookieToken(r)
+	token = GetCookieValue(r, Session_Token)
 
 	fmt.Println("Token from cookie: " + token)
 
 	if token == "" {
 		ctx := context.Background()
+
 		conf := &clientcredentials.Config{
-			ClientID:     "EN4wn2L0gEUyEhim76SHs4N0",
-			ClientSecret: "nCepZvUBjqL0Cw36U1t6QeWZmyzzzaLr",
-			Scopes:       []string{"manage_my_profile:flexy-commerce", "manage_my_shopping_lists:flexy-commerce", "manage_my_orders:flexy-commerce", "create_anonymous_token:flexy-commerce", "manage_my_payments:flexy-commerce", "view_published_products:flexy-commerce"},
+			ClientID:     "ve6pA6Q5mg47bR5172nls3HP",
+			ClientSecret: "m3q0jGhD5p2leAD-heznIVJ5OlEkYDiI",
+			Scopes:       []string{"manage_my_profile:flexy-commerce manage_customers:flexy-commerce manage_my_shopping_lists:flexy-commerce manage_my_orders:flexy-commerce create_anonymous_token:flexy-commerce manage_my_payments:flexy-commerce manage_subscriptions:flexy-commerce view_published_products:flexy-commerce"},
 			TokenURL:     "https://auth.sphere.io/oauth/flexy-commerce/anonymous/token/",
 		}
 
 		authToken, _ := conf.Token(ctx)
 		token = authToken.AccessToken
-		SetCookieToken(w, r, token)
+		SetCookieValue(w, r, Session_Token, token)
+	}
 
-		fmt.Println("Token from new: " + token)
+	req.Header.Set("Authorization", "Bearer "+token)
+}
+
+func SetPasswordAuthToken(w http.ResponseWriter, r *http.Request, req *http.Request, username string, password string) {
+	var token string
+	token = GetCookieValue(r, Customer_Token)
+
+	if token == "" {
+		ctx := context.Background()
+
+		conf := &oauth2.Config{
+			ClientID:     "ve6pA6Q5mg47bR5172nls3HP",
+			ClientSecret: "m3q0jGhD5p2leAD-heznIVJ5OlEkYDiI",
+			Scopes:       []string{"manage_my_profile:flexy-commerce manage_my_shopping_lists:flexy-commerce manage_my_orders:flexy-commerce manage_my_payments:flexy-commerce view_published_products:flexy-commerce"},
+			Endpoint:     oauth2.Endpoint{TokenURL: "https://auth.sphere.io/oauth/flexy-commerce/customers/token/"},
+		}
+
+		authToken, err := conf.PasswordCredentialsToken(ctx, username, password)
+
+		if err != nil {
+			fmt.Println("Error creating token")
+			fmt.Println(err)
+			return
+		}
+		token = authToken.AccessToken
+		SetCookieValue(w, r, Customer_Token, token)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)

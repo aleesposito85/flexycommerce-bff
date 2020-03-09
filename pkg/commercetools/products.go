@@ -42,6 +42,7 @@ type ProductFull struct {
 	MasterData struct {
 		Current struct {
 			Name          string `graphql:"name(locale: $lang)"`
+			Description   string `graphql:"description(locale: $lang)"`
 			MasterVariant VariantAttributes
 		}
 	}
@@ -127,8 +128,6 @@ func GetProduct(id string, textAttributes []string, enumAttributes []string) Sin
 	}
 
 	httpClient := conf.Client(ctx)
-
-	//client := graphql.NewClient("https://api.sphere.io/flexy-commerce/graphql", httpClient)
 
 	var attributesText []graphql.String
 

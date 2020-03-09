@@ -2,7 +2,6 @@ package commercetools
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io/ioutil"
 	"log"
@@ -12,20 +11,19 @@ import (
 	"../structs"
 
 	"fmt"
-
-	"golang.org/x/oauth2/clientcredentials"
 )
 
-type AddToCartRequest struct {
+type ActionCartRequest struct {
 	Version int64              `json:"version"`
 	Actions []CartUpdateAction `json:"actions"`
 }
 
 type CartUpdateAction struct {
-	Action     string `json:"action,omitempty"`
-	ProductId  string `json:"productId,omitempty"`
-	LineItemId string `json:"lineItemId,omitempty"`
-	Quantity   int64  `json:"quantity"`
+	Action     string          `json:"action,omitempty"`
+	ProductId  string          `json:"productId,omitempty"`
+	LineItemId string          `json:"lineItemId,omitempty"`
+	Quantity   int64           `json:"quantity"`
+	Address    structs.Address `json:"address,omitempty"`
 }
 
 type CartsResponse struct {
@@ -37,11 +35,12 @@ type CartsResponse struct {
 }
 
 type CartResponse struct {
-	ID          string        `json:"id,omitempty"`
-	Version     int64         `json:"version,omitempty"`
-	AnonymousId string        `json:"anonymousId,omitempty"`
-	TotalPrice  structs.Price `json:"totalPrice,omitempty"`
-	LineItems   []LineItem    `json:"lineItems,omitempty"`
+	ID              string          `json:"id,omitempty"`
+	Version         int64           `json:"version,omitempty"`
+	AnonymousId     string          `json:"anonymousId,omitempty"`
+	TotalPrice      structs.Price   `json:"totalPrice,omitempty"`
+	LineItems       []LineItem      `json:"lineItems,omitempty"`
+	ShippingAddress structs.Address `json:"shippingAddress,omitempty"`
 }
 
 type LineItem struct {
@@ -80,7 +79,7 @@ func GetCart(w http.ResponseWriter, r *http.Request) CartResponse {
 	if err != nil {
 		log.Fatal("Error reading request. ", err)
 	}
-	setAuthToken(w, r, req)
+	services.SetPasswordAuthToken(w, r, req, "", "")
 
 	response, err := httpClient.Do(req)
 	if err != nil {
@@ -123,7 +122,7 @@ func AddToCart(w http.ResponseWriter, r *http.Request, request structs.AddToCart
 		Quantity:  request.Quantity,
 	}
 
-	commerceToolsRequest := AddToCartRequest{
+	commerceToolsRequest := ActionCartRequest{
 		Version: cartVersion,
 		Actions: []CartUpdateAction{action},
 	}
@@ -133,7 +132,7 @@ func AddToCart(w http.ResponseWriter, r *http.Request, request structs.AddToCart
 	if err != nil {
 		log.Fatal("Error reading request. ", err)
 	}
-	setAuthToken(w, r, req)
+	services.SetPasswordAuthToken(w, r, req, "", "")
 
 	// Send request
 	resp, err := httpClient.Do(req)
@@ -175,7 +174,7 @@ func UpdateItemToCart(w http.ResponseWriter, r *http.Request, request structs.Up
 		Quantity:   request.Quantity,
 	}
 
-	commerceToolsRequest := AddToCartRequest{
+	commerceToolsRequest := ActionCartRequest{
 		Version: cartVersion,
 		Actions: []CartUpdateAction{action},
 	}
@@ -185,7 +184,7 @@ func UpdateItemToCart(w http.ResponseWriter, r *http.Request, request structs.Up
 	if err != nil {
 		log.Fatal("Error reading request. ", err)
 	}
-	setAuthToken(w, r, req)
+	services.SetAuthToken(w, r, req)
 
 	// Send request
 	resp, err := httpClient.Do(req)
@@ -193,7 +192,55 @@ func UpdateItemToCart(w http.ResponseWriter, r *http.Request, request structs.Up
 		log.Fatal("Error reading response. ", err)
 	}
 	defer resp.Body.Close()
-	fmt.Println("Add to cart response status: " + resp.Status)
+
+	if resp.StatusCode > 299 {
+		b, _ := ioutil.ReadAll(resp.Body)
+		fmt.Println(string(b))
+	}
+	var updatedCart CartResponse
+	json.NewDecoder(resp.Body).Decode(&updatedCart)
+
+	services.StoreCartIDAndVersion(w, r, updatedCart.ID, updatedCart.Version)
+
+	return updatedCart
+}
+
+func UpdateAddressToCart(w http.ResponseWriter, r *http.Request, request structs.Address) CartResponse {
+	cartID, cartVersion := services.GetCartIDAndVersion(r)
+
+	if cartID == "" {
+		cart := GetOrCreateCart(w, r)
+		cartID = cart.ID
+		cartVersion = cart.Version
+	}
+
+	url := "https://api.sphere.io/flexy-commerce/me/carts/" + cartID
+
+	fmt.Println("Calling url: " + url)
+
+	action := CartUpdateAction{
+		Action:  "setShippingAddress",
+		Address: request,
+	}
+
+	commerceToolsRequest := ActionCartRequest{
+		Version: cartVersion,
+		Actions: []CartUpdateAction{action},
+	}
+	data, _ := json.Marshal(commerceToolsRequest)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	if err != nil {
+		log.Fatal("Error reading request. ", err)
+	}
+	services.SetAuthToken(w, r, req)
+
+	// Send request
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Fatal("Error reading response. ", err)
+	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode > 299 {
 		b, _ := ioutil.ReadAll(resp.Body)
@@ -235,7 +282,7 @@ func CreateCart(w http.ResponseWriter, r *http.Request) CartResponse {
 	if err != nil {
 		log.Fatal("Error reading request. ", err)
 	}
-	setAuthToken(w, r, req)
+	services.SetPasswordAuthToken(w, r, req, "", "")
 
 	// Send request
 	resp, err := httpClient.Do(req)
@@ -251,29 +298,4 @@ func CreateCart(w http.ResponseWriter, r *http.Request) CartResponse {
 
 func getHTTPClient() *http.Client {
 	return &http.Client{}
-}
-
-func setAuthToken(w http.ResponseWriter, r *http.Request, req *http.Request) {
-	var token string
-	token = services.GetCookieToken(r)
-
-	fmt.Println("Token from cookie: " + token)
-
-	if token == "" {
-		ctx := context.Background()
-		conf := &clientcredentials.Config{
-			ClientID:     "EN4wn2L0gEUyEhim76SHs4N0",
-			ClientSecret: "nCepZvUBjqL0Cw36U1t6QeWZmyzzzaLr",
-			Scopes:       []string{"manage_my_profile:flexy-commerce", "manage_my_shopping_lists:flexy-commerce", "manage_my_orders:flexy-commerce", "create_anonymous_token:flexy-commerce", "manage_my_payments:flexy-commerce", "view_published_products:flexy-commerce"},
-			TokenURL:     "https://auth.sphere.io/oauth/flexy-commerce/anonymous/token/",
-		}
-
-		authToken, _ := conf.Token(ctx)
-		token = authToken.AccessToken
-		services.SetCookieToken(w, r, token)
-
-		fmt.Println("Token from new: " + token)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+token)
 }

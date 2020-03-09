@@ -30,6 +30,9 @@ func main() {
 	router.HandleFunc("/cart", getCart).Methods("GET")
 	router.HandleFunc("/addToCart", addToCart).Methods("POST")
 	router.HandleFunc("/updateCartItem", updateCartItem).Methods("POST")
+	router.HandleFunc("/updateCartAddress", updateCartAddress).Methods("POST")
+	router.HandleFunc("/shippingMethods", getShippingMethods).Methods("GET")
+	router.HandleFunc("/login", customerSignin).Methods("POST")
 
 	headersOk := handlers.AllowedHeaders([]string{"Content-Type"})
 	originsOk := handlers.AllowedOrigins([]string{"http://localhost:3000"}) //TODO change with the "production" host
@@ -74,14 +77,13 @@ func getProduct(w http.ResponseWriter, r *http.Request) {
 
 	commerceProduct := commercetools.GetProduct(productID, []string{"size", "season"}, []string{"gender", "madeInItaly"})
 
-	//fmt.Println(reflect.TypeOf(commerceProduct.Product.MasterData.Current.MasterVariant.AttributesText[0].Value))
-
 	var product = structs.ProductFull{
-		Id:    commerceProduct.Product.Id,
-		Name:  commerceProduct.Product.MasterData.Current.Name,
-		Image: commerceProduct.Product.MasterData.Current.MasterVariant.Images[0].Url,
-		Price: commerceProduct.Product.MasterData.Current.MasterVariant.Price.Value.CentAmount,
-		Size:  commerceProduct.Product.MasterData.Current.MasterVariant.AttributesText[0].Value.(string),
+		Id:          commerceProduct.Product.Id,
+		Name:        commerceProduct.Product.MasterData.Current.Name,
+		Description: commerceProduct.Product.MasterData.Current.Description,
+		Image:       commerceProduct.Product.MasterData.Current.MasterVariant.Images[0].Url,
+		Price:       commerceProduct.Product.MasterData.Current.MasterVariant.Price.Value.CentAmount,
+		Size:        commerceProduct.Product.MasterData.Current.MasterVariant.AttributesText[0].Value.(string),
 	}
 
 	json.NewEncoder(w).Encode(product)
@@ -133,4 +135,63 @@ func updateCartItem(w http.ResponseWriter, r *http.Request) {
 	newCart := commercetools.UpdateItemToCart(w, r, cartItemRequest)
 
 	json.NewEncoder(w).Encode(newCart)
+}
+
+func updateCartAddress(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var cartAddressRequest structs.Address
+
+	// Try to decode the request body into the struct. If there is an error,
+	// respond to the client with the error message and a 400 status code.
+	err := json.NewDecoder(r.Body).Decode(&cartAddressRequest)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	newCart := commercetools.UpdateAddressToCart(w, r, cartAddressRequest)
+
+	json.NewEncoder(w).Encode(newCart)
+}
+
+func getShippingMethods(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	commerceShippingMethods := commercetools.GetShippingMethods(w, r)
+
+	var shippingsSlice = []structs.ShippingMethod{}
+
+	for _, s := range commerceShippingMethods {
+		var shipping = structs.ShippingMethod{
+			ID:          s.ID,
+			Name:        s.Name,
+			Description: s.Description,
+			Price:       s.ZoneRates[0].ShippingRates[0].Price,
+		}
+		shippingsSlice = append(shippingsSlice, shipping)
+	}
+
+	var shippings = structs.ShippingsResponse{
+		Shippings: shippingsSlice,
+	}
+
+	json.NewEncoder(w).Encode(shippings)
+
+}
+
+func customerSignin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var signinRequest structs.SigninRequest
+
+	err := json.NewDecoder(r.Body).Decode(&signinRequest)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	signinResponse := commercetools.GetCustomerFromPasswordFlow(w, r, signinRequest)
+
+	json.NewEncoder(w).Encode(signinResponse)
 }

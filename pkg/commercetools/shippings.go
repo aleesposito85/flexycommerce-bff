@@ -3,50 +3,62 @@ package commercetools
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 
+	"../services"
 	"../structs"
 
 	"fmt"
 )
 
-type ShippingsResponse struct {
+type CommerceShippingsResponse struct {
 	structs.CommerceResultsResponse
-	Results []ShippingResponse `json:"results"`
+	Results []CommerceShippingResponse `json:"results"`
 }
 
-type ShippingResponse struct {
+type CommerceShippingResponse struct {
 	ID          string             `json:"id,omitempty"`
 	Name        string             `json:"name,omitempty"`
 	Description string             `json:"description,omitempty"`
-	Price       structs.PriceValue `json:"price"`
+	ZoneRates   []CommerceZoneRate `json:"zoneRates"`
 }
 
-//GetCart returns the active cart of the user based on access token
-func GetShippingMethods(w http.ResponseWriter, r *http.Request) CartResponse {
+type CommerceZoneRate struct {
+	Zone          interface{}            `json:"zone"`
+	ShippingRates []CommerceShippingRate `json:"shippingRates"`
+}
 
-	var carts CartsResponse
+type CommerceShippingRate struct {
+	Price structs.Price `json:"price"`
+}
+
+//GetShippingMethods returns the available shipping methods in the system
+func GetShippingMethods(w http.ResponseWriter, r *http.Request) []CommerceShippingResponse {
+
+	var shippingMethods []CommerceShippingResponse
 
 	//httpClient := getHttpClient()
-	url := "https://api.sphere.io/flexy-commerce/shipping-methods"
+	url := "https://api.sphere.io/flexy-commerce/shipping-methods?country=US"
 
 	req, err := http.NewRequest("GET", url, bytes.NewBuffer([]byte{}))
 	if err != nil {
 		log.Fatal("Error reading request. ", err)
 	}
-	setAuthToken(w, r, req)
+	services.SetAuthToken(w, r, req)
 
 	response, err := httpClient.Do(req)
 	if err != nil {
 		fmt.Printf("The HTTP request failed with error %s\n", err)
 	}
-	fmt.Println("Get cart response status: " + response.Status)
-	json.NewDecoder(response.Body).Decode(&carts)
 
-	if len(carts.Results) > 0 {
-		return carts.Results[0]
+	if response.StatusCode > 299 {
+		b, _ := ioutil.ReadAll(response.Body)
+		fmt.Println(string(b))
+	} else {
+		json.NewDecoder(response.Body).Decode(&shippingMethods)
 	}
 
-	return CartResponse{}
+	return shippingMethods
 }
